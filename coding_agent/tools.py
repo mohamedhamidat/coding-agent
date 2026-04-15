@@ -1,5 +1,6 @@
 import os
 import inspect
+import json
 import logging
 from pathlib import Path
 from typing import Callable, Dict, Any, List
@@ -19,7 +20,7 @@ class ToolRegistry:
     """Manages available tools and generates descriptions for LLM."""
 
     def __init__(self):
-        self.tools = _tools
+        self.tools = _tools.copy()
 
     def get_tools_for_function_calling(self) -> List[Dict]:
         """Generate tools in function calling format for litellm."""
@@ -32,17 +33,31 @@ class ToolRegistry:
 
             for param_name, param in sig.parameters.items():
                 param_type = "string"
-                if param.annotation != inspect.Parameter.empty:
-                    type_name = param.annotation.__name__
-                    if type_name == "int":
-                        param_type = "integer"
-                    elif type_name == "bool":
-                        param_type = "boolean"
+                param_schema = {}
 
-                properties[param_name] = {
-                    "type": param_type,
-                    "description": f"{param_name} parameter"
-                }
+                if param.annotation != inspect.Parameter.empty:
+                    # Handle complex types (like List[Dict]) that don't have __name__
+                    try:
+                        type_name = param.annotation.__name__
+                        if type_name == "int":
+                            param_type = "integer"
+                        elif type_name == "bool":
+                            param_type = "boolean"
+                        elif type_name == "list":
+                            param_type = "array"
+                    except AttributeError:
+                        # Complex type annotation (List[Dict], etc)
+                        # Check if it's a list type
+                        type_str = str(param.annotation)
+                        if "List" in type_str or "list" in type_str:
+                            param_type = "array"
+                            # For arrays, we need to specify items type
+                            # Default to object type for List[Dict]
+                            param_schema["items"] = {"type": "object"}
+
+                param_schema["type"] = param_type
+                param_schema["description"] = f"{param_name} parameter"
+                properties[param_name] = param_schema
 
                 if param.default == inspect.Parameter.empty:
                     required.append(param_name)
@@ -63,6 +78,7 @@ class ToolRegistry:
             tools.append(tool_def)
 
         logger.debug(f"Generated {len(tools)} tool definitions")
+        print(f"Registered tools: {', '.join(self.tools.keys())}")
         return tools
 
     def execute(self, tool_name: str, args: Dict[str, Any]) -> str:

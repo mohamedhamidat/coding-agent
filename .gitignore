@@ -39,6 +39,16 @@ env/
 htmlcov/
 .tox/
 
+# Test artifacts (anywhere in project)
+test*.txt
+new*.txt
+*.bin
+*.heapsnapshot
+
+# Test artifacts (in tests folder specifically)
+tests/test*.txt
+tests/new*.txt
+
 # Logs
 *.log
 coding_agent.log
